@@ -1,0 +1,19 @@
+[
+  {
+    "label": "ASM: Build + Run (current .asm)",
+    "command": "cmd",
+    "args": ["/c", "build_run.cmd", "$ZED_FILENAME"],
+    "cwd": "$ZED_DIRNAME",
+    "save": "all",
+    "reveal": "always",
+    "use_new_terminal": true
+  },
+  {
+    "label": "ASM: Build only (current .asm)",
+    "command": "cmd",
+    "args": ["/c", "build_run.cmd", "$ZED_FILENAME", "--norun"],
+    "cwd": "$ZED_DIRNAME",
+    "save": "all",
+    "reveal": "always"
+  }
+]

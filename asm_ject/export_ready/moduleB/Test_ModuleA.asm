@@ -14,6 +14,8 @@ INCLUDELIB C:\Irvine\User32.lib
 ; =========================================================
 GenerateKeySchedule PROTO :PTR BYTE, :PTR BYTE
 DES_ProcessBlock    PROTO :PTR BYTE, :PTR BYTE, :PTR BYTE, :DWORD
+DisplayHexDump      PROTO :PTR BYTE, :DWORD
+ComputeBufferStats  PROTO :PTR BYTE, :DWORD
 
 
 .data
@@ -100,6 +102,7 @@ msgDecSuccess   BYTE "File decrypted successfully -> ", 0
 msgFileError    BYTE "ERROR: Cannot open, read, or create file", 0Dh, 0Ah, 0
 msgParamError   BYTE "ERROR: Invalid parameters. Usage: <CMD> <filename> <key>", 0Dh, 0Ah, 0
 msgPadError     BYTE "ERROR: Invalid PKCS#7 Padding in decrypted data", 0Dh, 0Ah, 0
+msgDumpUsage    BYTE "ERROR: Invalid parameters. Usage: <CMD> <filename>", 0Dh, 0Ah, 0
 
 
 ; =========================================================
@@ -628,16 +631,163 @@ DecryptFailPad:
 
 
 ; =========================================================
-; PLACEHOLDERS FOR DUMP & STATS
+; HANDLE DUMP  (Module D)
 ; =========================================================
 
 HandleDump:
-    mov  edx, OFFSET msgDump
+    ; parse filename after "DUMP"
+    mov  esi, OFFSET inputBuffer
+    add  esi, 4
+
+DumpSkipSpace:
+    mov  al, [esi]
+    cmp  al, ' '
+    jne  DumpCheckQuote
+    inc  esi
+    jmp  DumpSkipSpace
+
+DumpCheckQuote:
+    cmp  al, 0
+    je   DumpFailParams
+    mov  edi, OFFSET inFileName
+    cmp  al, '"'
+    jne  DumpNameNoQuote
+
+    inc  esi
+DumpNameQuote:
+    mov  al, [esi]
+    cmp  al, '"'
+    je   DumpNameDone
+    cmp  al, 0
+    je   DumpFailParams
+    mov  [edi], al
+    inc  esi
+    inc  edi
+    jmp  DumpNameQuote
+
+DumpNameNoQuote:
+    mov  al, [esi]
+    cmp  al, ' '
+    je   DumpNameDone
+    cmp  al, 0
+    je   DumpNameDone
+    mov  [edi], al
+    inc  esi
+    inc  edi
+    jmp  DumpNameNoQuote
+
+DumpNameDone:
+    mov  BYTE PTR [edi], 0
+
+    ; open + read
+    mov  edx, OFFSET inFileName
+    call OpenInputFile
+    cmp  eax, INVALID_HANDLE_VALUE
+    je   DumpFailFile
+    mov  fileHandle, eax
+
+    mov  edx, OFFSET fileBuffer
+    mov  ecx, SIZEOF fileBuffer
+    mov  eax, fileHandle
+    call ReadFromFile
+    jc   DumpCloseFail
+    mov  fileSize, eax
+
+    mov  eax, fileHandle
+    call CloseFile
+
+    INVOKE DisplayHexDump, ADDR fileBuffer, fileSize
+    jmp  MainLoop
+
+DumpCloseFail:
+    mov  eax, fileHandle
+    call CloseFile
+DumpFailFile:
+    mov  edx, OFFSET msgFileError
+    call WriteString
+    jmp  MainLoop
+DumpFailParams:
+    mov  edx, OFFSET msgDumpUsage
     call WriteString
     jmp  MainLoop
 
+
+; =========================================================
+; HANDLE STATS  (Module D)
+; =========================================================
+
 HandleStats:
-    mov  edx, OFFSET msgStats
+    mov  esi, OFFSET inputBuffer
+    add  esi, 5
+
+StatsSkipSpace:
+    mov  al, [esi]
+    cmp  al, ' '
+    jne  StatsCheckQuote
+    inc  esi
+    jmp  StatsSkipSpace
+
+StatsCheckQuote:
+    cmp  al, 0
+    je   StatsFailParams
+    mov  edi, OFFSET inFileName
+    cmp  al, '"'
+    jne  StatsNameNoQuote
+
+    inc  esi
+StatsNameQuote:
+    mov  al, [esi]
+    cmp  al, '"'
+    je   StatsNameDone
+    cmp  al, 0
+    je   StatsFailParams
+    mov  [edi], al
+    inc  esi
+    inc  edi
+    jmp  StatsNameQuote
+
+StatsNameNoQuote:
+    mov  al, [esi]
+    cmp  al, ' '
+    je   StatsNameDone
+    cmp  al, 0
+    je   StatsNameDone
+    mov  [edi], al
+    inc  esi
+    inc  edi
+    jmp  StatsNameNoQuote
+
+StatsNameDone:
+    mov  BYTE PTR [edi], 0
+
+    mov  edx, OFFSET inFileName
+    call OpenInputFile
+    cmp  eax, INVALID_HANDLE_VALUE
+    je   StatsFailFile
+    mov  fileHandle, eax
+
+    mov  edx, OFFSET fileBuffer
+    mov  ecx, SIZEOF fileBuffer
+    mov  eax, fileHandle
+    call ReadFromFile
+    jc   StatsCloseFail
+    mov  fileSize, eax
+
+    mov  eax, fileHandle
+    call CloseFile
+
+    INVOKE ComputeBufferStats, ADDR fileBuffer, fileSize
+    jmp  MainLoop
+
+StatsCloseFail:
+    mov  eax, fileHandle
+    call CloseFile
+StatsFailFile:
+    mov  edx, OFFSET msgFileError
+    call WriteString
+    jmp  MainLoop
+StatsFailParams:
+    mov  edx, OFFSET msgDumpUsage
     call WriteString
     jmp  MainLoop
 
